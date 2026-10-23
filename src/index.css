@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-default: #0F1115;
+  --bg-surface: #171A21;
+  --bg-elevated: #1F242F;
+  --bg-card: #13161C;
+  --border-color: #262B36;
+  --border-subtle: #1D222B;
+  --text-primary: #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted: #8A94A6;
+  --text-subtle: #64748B;
+  --text-inverse: #0F172A;
+}
+
+html.light {
+  --bg-default: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --border-color: #E2E8F0;
+  --border-subtle: #F1F5F9;
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+  --text-subtle: #94A3B8;
+  --text-inverse: #FFFFFF;
+  color-scheme: light;
+}
+
+html.dark {
+  --bg-default: #0F1115;
+  --bg-surface: #171A21;
+  --bg-elevated: #1F242F;
+  --bg-card: #13161C;
+  --border-color: #262B36;
+  --border-subtle: #1D222B;
+  --text-primary: #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted: #8A94A6;
+  --text-subtle: #64748B;
+  --text-inverse: #0F172A;
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-default);
+  color: var(--text-primary);
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* ========================================================
+   LIGHT THEME ENTERPRISE CONTRAST & ACCESSIBILITY RULES
+   (Dark Theme remains 100% untouched)
+   ======================================================== */
+html.light .text-teal-300 {
+  color: #0f766e;
+}
+html.light .text-teal-400 {
+  color: #0d9488;
+}
+html.light .text-emerald-300 {
+  color: #047857;
+}
+html.light .text-emerald-400 {
+  color: #059669;
+}
+html.light .text-amber-300 {
+  color: #b45309;
+}
+html.light .text-amber-400 {
+  color: #d97706;
+}
+html.light .text-rose-300 {
+  color: #be123c;
+}
+html.light .text-rose-400 {
+  color: #e11d48;
+}
+html.light .text-purple-300 {
+  color: #6d28d9;
+}
+html.light .text-purple-400 {
+  color: #7c3aed;
+}
+
+/* Crisp borders on badge pills in light mode */
+html.light .border-teal-500\/20,
+html.light .border-teal-500\/30 {
+  border-color: rgba(13, 148, 136, 0.25);
+}
+html.light .border-emerald-500\/20,
+html.light .border-emerald-500\/30 {
+  border-color: rgba(5, 150, 105, 0.25);
+}
+html.light .border-amber-500\/20,
+html.light .border-amber-500\/30 {
+  border-color: rgba(217, 119, 6, 0.25);
+}
+html.light .border-rose-500\/20,
+html.light .border-rose-500\/30 {
+  border-color: rgba(225, 29, 72, 0.25);
+}
+
+/* Polished card shadow and surface separation in light mode */
+html.light .bg-surface,
+html.light .bg-surface-card {
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
+}
+
+/* Polished inputs in light mode */
+html.light input,
+html.light textarea,
+html.light select {
+  color: #0F172A;
+}
+
+/* Light mode scrollbar thumb */
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.25);
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.45);
+}
