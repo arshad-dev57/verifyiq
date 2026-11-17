@@ -6,9 +6,9 @@ import { Layers, Shield, FileText } from 'lucide-react';
 import { formatDate } from '../../lib/utils';
 
 export const AuditLogsPage: React.FC = () => {
-  const { data: logs, isLoading } = useAuditLogs();
+  const { data: logs, isLoading, isError, error, refetch } = useAuditLogs();
 
-  if (isLoading || !logs) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
@@ -16,6 +16,26 @@ export const AuditLogsPage: React.FC = () => {
       </div>
     );
   }
+
+  if (isError) {
+    return (
+      <div className="max-w-lg mx-auto py-16 text-center space-y-3">
+        <p className="text-sm font-medium text-text-primary">Could not load audit logs</p>
+        <p className="text-xs text-text-muted">
+          {(error as any)?.response?.data?.detail || (error as Error)?.message || 'Access denied or server error.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="text-xs font-medium text-teal-500 hover:underline"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const rows = logs || [];
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in duration-200">
@@ -46,13 +66,20 @@ export const AuditLogsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {logs.map((log) => (
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-text-muted">
+                    No audit events yet. Actions like login, create assessment, and session review will appear here.
+                  </td>
+                </tr>
+              )}
+              {rows.map((log) => (
                 <tr key={log.id} className="hover:bg-surface-elevated/40 transition-colors">
                   <td className="px-4 py-3 font-mono text-text-muted whitespace-nowrap">
                     {formatDate(log.ts)}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="font-medium text-text-secondary">{log.actor_email}</span>
+                    <span className="font-medium text-text-secondary">{log.actor_email || log.actor_id || '—'}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="font-mono text-teal-300 px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px]">

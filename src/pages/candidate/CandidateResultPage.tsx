@@ -18,9 +18,20 @@ import { formatDate } from '../../lib/utils';
 export const CandidateResultPage: React.FC = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const sessionId = params.get('session_id') || 'S-1001';
+  const sessionId = params.get('session_id') || '';
 
   const { data: session, isLoading } = useSession(sessionId);
+
+  if (!sessionId) {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-4">
+        <p className="text-sm text-text-muted">Missing session. Return to your dashboard.</p>
+        <Button size="sm" variant="primary" onClick={() => navigate('/candidate')}>
+          Dashboard
+        </Button>
+      </div>
+    );
+  }
 
   if (isLoading || !session) {
     return (
@@ -31,8 +42,12 @@ export const CandidateResultPage: React.FC = () => {
     );
   }
 
-  const isPassing = (session.score || 0) >= 70;
-  const isCredentialIssued = isPassing && session.review_decision !== 'needs_followup';
+  const testsOk =
+    (session.tests_total || 0) > 0
+      ? (session.tests_passed || 0) >= (session.tests_total || 0)
+      : (session.score || 0) >= 70;
+  // Backend is source of truth; UI only reflects eligibility hint (never shows anomaly score)
+  const isCredentialReady = session.credential_eligible === true || (testsOk && session.credential_eligible !== false);
 
   return (
     <div className="max-w-xl mx-auto py-12 px-4 animate-in fade-in duration-200 text-center">
@@ -81,14 +96,14 @@ export const CandidateResultPage: React.FC = () => {
         </div>
 
         {/* Verifiable Credential Box */}
-        {isCredentialIssued ? (
+        {isCredentialReady ? (
           <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-500/30 space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-teal-300">
               <ShieldCheck className="w-4 h-4 text-teal-400" />
               <span>W3C Digital Credential Ready</span>
             </div>
             <p className="text-xs text-text-secondary leading-relaxed">
-              Your solution meets all certification standards. A verifiable credential signed with Ed25519 cryptography has been generated.
+              Your solution meets eligibility rules (tests passed and Normal / instructor-cleared). You can view issued credentials below.
             </p>
             <Button
               size="sm"

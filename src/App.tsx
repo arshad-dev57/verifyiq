@@ -36,7 +36,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 5, // 5 mins
+      staleTime: 1000 * 60 * 5,
       retry: 1,
     },
   },
@@ -54,7 +54,7 @@ export function App() {
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/verify/:id" element={<PublicVerifyPage />} />
 
-          {/* Candidate Focus Exam Routes (No rail / focus environment) */}
+          {/* Candidate Focus Exam Routes */}
           <Route
             element={
               <RoleGuard allowedRoles={['candidate', 'instructor', 'admin']}>
@@ -69,7 +69,7 @@ export function App() {
             <Route path="/candidate/result" element={<CandidateResultPage />} />
           </Route>
 
-          {/* Main App Layout with Left Rail & TopBar */}
+          {/* Candidate portal (rail) */}
           <Route
             element={
               <RoleGuard allowedRoles={['candidate', 'instructor', 'admin']}>
@@ -77,11 +77,18 @@ export function App() {
               </RoleGuard>
             }
           >
-            {/* Candidate Portal in Rail */}
             <Route path="/candidate" element={<CandidateDashboard />} />
             <Route path="/candidate/credentials" element={<CandidateCredentialsPage />} />
+          </Route>
 
-            {/* Instructor / Admin Routes */}
+          {/* Instructor / Admin only — candidates cannot deep-link here */}
+          <Route
+            element={
+              <RoleGuard allowedRoles={['instructor', 'admin']}>
+                <AppLayout />
+              </RoleGuard>
+            }
+          >
             <Route path="/ask" element={<AskVerifyIQPage />} />
             <Route path="/dashboard" element={<InstructorDashboard />} />
             <Route path="/sessions" element={<SessionsListPage />} />
@@ -93,7 +100,6 @@ export function App() {
             <Route path="/audit-logs" element={<AuditLogsPage />} />
           </Route>
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

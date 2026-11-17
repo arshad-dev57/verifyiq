@@ -6,7 +6,7 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { Settings, Shield, Clock, Sliders, Check, Lock } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
-  const { data: settings, isLoading } = useSystemSettings();
+  const { data: settings, isLoading, isError, error, refetch } = useSystemSettings();
   const updateMutation = useUpdateSettings();
 
   const [retentionDays, setRetentionDays] = useState<number>(90);
@@ -30,11 +30,25 @@ export const SettingsPage: React.FC = () => {
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  if (isLoading || !settings) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
         <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
+
+  if (isError || !settings) {
+    return (
+      <div className="max-w-lg mx-auto py-16 text-center space-y-3">
+        <p className="text-sm font-medium text-text-primary">Could not load settings</p>
+        <p className="text-xs text-text-muted">
+          {(error as any)?.response?.data?.detail || (error as Error)?.message || 'Check you are logged in as Examiner/Admin.'}
+        </p>
+        <Button size="sm" variant="outline" onClick={() => refetch()}>
+          Retry
+        </Button>
       </div>
     );
   }

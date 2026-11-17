@@ -18,7 +18,7 @@ import { formatDate } from '../../lib/utils';
 import { VerifiableCredential } from '../../types';
 
 export const CredentialsManagementPage: React.FC = () => {
-  const { data: credentials, isLoading } = useCredentials();
+  const { data: credentials, isLoading, isError, error, refetch } = useCredentials();
   const revokeMutation = useRevokeCredential();
   const [selectedCred, setSelectedCred] = useState<VerifiableCredential | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -39,7 +39,7 @@ export const CredentialsManagementPage: React.FC = () => {
     downloadAnchor.remove();
   };
 
-  if (isLoading || !credentials) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
@@ -47,6 +47,18 @@ export const CredentialsManagementPage: React.FC = () => {
       </div>
     );
   }
+
+  if (isError) {
+    return (
+      <div className="max-w-lg mx-auto py-16 text-center space-y-3">
+        <p className="text-sm font-medium text-text-primary">Could not load credentials</p>
+        <p className="text-xs text-text-muted">{(error as Error)?.message || 'Request failed'}</p>
+        <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
+
+  const list = credentials || [];
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in duration-200">
@@ -78,7 +90,14 @@ export const CredentialsManagementPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {credentials.map((cred) => (
+              {list.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-text-muted">
+                    No credentials issued yet. After a candidate passes and (if needed) you clear their review, issue a credential from the session page.
+                  </td>
+                </tr>
+              )}
+              {list.map((cred) => (
                 <tr key={cred.id} className="hover:bg-surface-elevated/40 transition-colors">
                   <td className="px-4 py-3 font-mono font-semibold text-teal-400">
                     {cred.id.slice(0, 16)}...

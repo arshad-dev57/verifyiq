@@ -55,23 +55,9 @@ export const useAuthStore = create<AuthState>((set) => {
       set({ user: null, isAuthenticated: false, token: null });
     },
 
-    switchRole: async (role: UserRole) => {
-      try {
-        let email = 'candidate@verifyiq.io';
-        let pass = 'Candidate123!';
-        if (role === 'instructor') {
-          email = 'instructor@verifyiq.io';
-          pass = 'Instructor123!';
-        } else if (role === 'admin') {
-          email = 'admin@verifyiq.io';
-          pass = 'Admin123!';
-        }
-
-        const res = await authApi.login(email, pass);
-        set({ user: res.user, isAuthenticated: true, token: res.access_token });
-      } catch (e) {
-        console.error('Role switch failed:', e);
-      }
+    // Demo role-hopping removed — each person registers their own account
+    switchRole: async (_role: UserRole) => {
+      console.warn('Role switching is disabled. Register or log in with the correct account.');
     },
   };
 });

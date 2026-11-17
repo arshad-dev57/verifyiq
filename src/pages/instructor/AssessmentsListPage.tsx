@@ -3,13 +3,12 @@ import { useAssessments, useCreateAssessment } from '../../hooks/queries';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Skeleton } from '../../components/ui/Skeleton';
-import { FileCode, Plus, Clock, Users, Shield, ArrowRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Plus, Clock, ArrowRight } from 'lucide-react';
 
 export const AssessmentsListPage: React.FC = () => {
   const { data: assessments, isLoading } = useAssessments();
-  const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newDuration, setNewDuration] = useState(45);
@@ -66,57 +65,87 @@ export const AssessmentsListPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {assessments.map((asm) => (
-          <Card
-            key={asm.id}
-            variant="interactive"
-            className="p-5 flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span
-                  className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-full ${
-                    asm.difficulty === 'hard'
-                      ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                      : asm.difficulty === 'medium'
-                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  }`}
-                >
-                  {asm.difficulty}
-                </span>
+        {assessments.map((asm) => {
+          const open = expandedId === asm.id;
+          const tasks = asm.tasks || [];
+          return (
+            <Card
+              key={asm.id}
+              variant="interactive"
+              className="p-5 flex flex-col justify-between"
+              onClick={() => setExpandedId(open ? null : asm.id)}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span
+                    className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-full ${
+                      asm.difficulty === 'hard'
+                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        : asm.difficulty === 'medium'
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    }`}
+                  >
+                    {asm.difficulty}
+                  </span>
 
-                <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                    asm.status === 'published'
-                      ? 'bg-teal-500/10 text-teal-300'
-                      : 'bg-surface-elevated/50 text-text-muted'
-                  }`}
-                >
-                  {asm.status}
-                </span>
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                      asm.status === 'published'
+                        ? 'bg-teal-500/10 text-teal-300'
+                        : 'bg-surface-elevated/50 text-text-muted'
+                    }`}
+                  >
+                    {asm.status}
+                  </span>
+                </div>
+
+                <h3 className="text-sm font-semibold text-text-primary mb-1.5 leading-snug">
+                  {asm.title}
+                </h3>
+
+                <p className="text-xs text-text-muted line-clamp-3 mb-4 leading-relaxed">
+                  {asm.description}
+                </p>
+
+                {open && (
+                  <div className="mb-4 space-y-2 rounded-xl border border-border bg-surface-elevated/50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-subtle">
+                      Tasks ({tasks.length || asm.tasks_count || 0})
+                    </p>
+                    {tasks.length === 0 ? (
+                      <p className="text-xs text-text-muted">
+                        Default task auto-created on assessment create. Candidates get the first task (or a randomized variant if enabled).
+                      </p>
+                    ) : (
+                      tasks.map((t) => (
+                        <div key={t.id} className="text-xs text-text-secondary border-b border-border/60 pb-2 last:border-0 last:pb-0">
+                          <p className="font-medium text-text-primary">{t.title}</p>
+                          <p className="text-text-muted font-mono text-[10px] mt-0.5">
+                            {t.language} · {t.points} pts · {t.test_config?.test_cases?.length || 0} tests
+                          </p>
+                        </div>
+                      ))
+                    )}
+                    <p className="text-[10px] text-text-subtle pt-1">
+                      ID: <span className="font-mono">{asm.id}</span> — candidates see this when published.
+                    </p>
+                  </div>
+                )}
               </div>
 
-              <h3 className="text-sm font-semibold text-text-primary mb-1.5 leading-snug">
-                {asm.title}
-              </h3>
-
-              <p className="text-xs text-text-muted line-clamp-3 mb-4 leading-relaxed">
-                {asm.description}
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-text-muted">
-              <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-text-subtle" />
-                {asm.duration_minutes} mins
-              </span>
-              <span className="text-teal-400 text-[11px] font-medium flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                Configure Tasks <ArrowRight className="w-3 h-3" />
-              </span>
-            </div>
-          </Card>
-        ))}
+              <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-text-muted">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-text-subtle" />
+                  {asm.duration_minutes} mins
+                </span>
+                <span className="text-teal-400 text-[11px] font-medium flex items-center gap-1">
+                  {open ? 'Hide tasks' : 'View tasks'} <ArrowRight className="w-3 h-3" />
+                </span>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Create Modal */}

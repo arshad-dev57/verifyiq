@@ -9,16 +9,22 @@ interface UseTelemetryOptions {
 
 export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions) {
   const eventQueueRef = useRef<TelemetryEvent[]>([]);
+  const seqRef = useRef<number>(0);
   const lastKeyTimeRef = useRef<number>(Date.now());
-  const idleTimerRef = useRef<any>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isIdleRef = useRef<boolean>(false);
   const mouseDistanceAccumulatorRef = useRef<number>(0);
   const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
   const lastMouseMoveFlushRef = useRef<number>(Date.now());
-  const batchIntervalRef = useRef<any>(null);
+  const batchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryCountRef = useRef<number>(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Helper to enqueue event strictly adhering to privacy guarantees
+  const nextSeq = useCallback(() => {
+    seqRef.current += 1;
+    return seqRef.current;
+  }, []);
+
   const enqueueEvent = useCallback(
     (eventType: EventType, metadata: TelemetryEvent['metadata']) => {
       if (!enabled || !sessionId) return;
@@ -27,15 +33,15 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
         session_id: sessionId,
         event_type: eventType,
         ts_ms: Date.now(),
+        seq: nextSeq(),
         metadata,
       };
 
       eventQueueRef.current.push(event);
     },
-    [enabled, sessionId]
+    [enabled, sessionId, nextSeq]
   );
 
-  // Reset idle timer (flags idle > 5 seconds)
   const resetIdleTimer = useCallback(() => {
     if (isIdleRef.current) {
       isIdleRef.current = false;
@@ -52,16 +58,15 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
     }, 5000);
   }, [enqueueEvent]);
 
-  // Flush queued events to backend
   const flushQueue = useCallback(async () => {
     if (eventQueueRef.current.length === 0 || !sessionId) return;
 
-    // Flush any pending mouse movement summary
     if (mouseDistanceAccumulatorRef.current > 0) {
       eventQueueRef.current.push({
         session_id: sessionId,
         event_type: 'mouse_move_summary',
         ts_ms: Date.now(),
+        seq: nextSeq(),
         metadata: { distance_px: Math.round(mouseDistanceAccumulatorRef.current) },
       });
       mouseDistanceAccumulatorRef.current = 0;
@@ -74,53 +79,50 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
       await telemetryApi.sendBatch(sessionId, eventsToSend);
       retryCountRef.current = 0;
     } catch (err) {
-      // Re-queue un-sent events with exponential backoff
       eventQueueRef.current = [...eventsToSend, ...eventQueueRef.current];
       retryCountRef.current = Math.min(retryCountRef.current + 1, 5);
-      console.warn(`[Telemetry] Batch failed, retrying (attempt ${retryCountRef.current})`, err);
+      const delayMs = Math.min(30000, 1000 * 2 ** retryCountRef.current);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(() => {
+        void flushQueue();
+      }, delayMs);
+      console.warn(`[Telemetry] Batch failed, retrying in ${delayMs}ms`, err);
     }
-  }, [sessionId]);
+  }, [sessionId, nextSeq]);
 
-  // Global listeners for keydown/keyup timing, paste length, focus/blur
   useEffect(() => {
     if (!enabled || !sessionId) return;
 
-    const handleKeyDown = () => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       resetIdleTimer();
       const now = Date.now();
       const interKeyMs = now - lastKeyTimeRef.current;
       lastKeyTimeRef.current = now;
 
-      // PRIVACY RULE: Never capture key character or code, only elapsed timing delta
+      let keyClass: 'backspace' | 'char' | 'other' = 'other';
+      if (e.key === 'Backspace' || e.key === 'Delete') keyClass = 'backspace';
+      else if (e.key.length === 1) keyClass = 'char';
+
       enqueueEvent('key_interval', {
-        inter_key_ms: Math.min(interKeyMs, 10000),
+        inter_key_ms: Math.min(Math.max(interKeyMs, 0), 10000),
+        key_class: keyClass,
       });
     };
 
     const handlePaste = (e: ClipboardEvent) => {
       resetIdleTimer();
       const pastedText = e.clipboardData?.getData('text') || '';
-      // PRIVACY RULE: Never store text content; only measure length of inserted payload
-      enqueueEvent('paste', {
-        paste_length: pastedText.length,
-      });
+      enqueueEvent('paste', { paste_length: pastedText.length });
     };
 
-    const handleCut = (e: ClipboardEvent) => {
+    const handleCut = () => {
       resetIdleTimer();
       const selected = window.getSelection()?.toString() || '';
-      enqueueEvent('cut', {
-        cut_length: selected.length,
-      });
+      enqueueEvent('cut', { cut_length: selected.length });
     };
 
-    const handleFocus = () => {
-      enqueueEvent('focus', { reason: 'window_focused' });
-    };
-
-    const handleBlur = () => {
-      enqueueEvent('blur', { reason: 'window_blurred' });
-    };
+    const handleFocus = () => enqueueEvent('focus', { reason: 'window_focused' });
+    const handleBlur = () => enqueueEvent('blur', { reason: 'window_blurred' });
 
     const handleVisibilityChange = () => {
       enqueueEvent('visibility_change', {
@@ -138,7 +140,6 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
       lastMousePosRef.current = { x: e.clientX, y: e.clientY };
 
       const now = Date.now();
-      // Throttle mouse distance summary every 3 seconds
       if (now - lastMouseMoveFlushRef.current > 3000 && mouseDistanceAccumulatorRef.current > 10) {
         enqueueEvent('mouse_move_summary', {
           distance_px: Math.round(mouseDistanceAccumulatorRef.current),
@@ -156,17 +157,12 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
 
     const handleScroll = () => {
       resetIdleTimer();
+      enqueueEvent('scroll', { reason: 'viewport_scroll' });
     };
 
-    // Unload beacon to guarantee delivery on page exit
+    // Prefer authenticated flush; beacon is best-effort without JWT
     const handleBeforeUnload = () => {
-      if (eventQueueRef.current.length > 0) {
-        const payload = JSON.stringify({ events: eventQueueRef.current });
-        const url = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'}/sessions/${sessionId}/telemetry`;
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
-        }
-      }
+      void flushQueue();
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -180,9 +176,8 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Batch sender every 5 seconds
     batchIntervalRef.current = setInterval(() => {
-      flushQueue();
+      void flushQueue();
     }, 5000);
 
     return () => {
@@ -199,11 +194,11 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
 
       if (batchIntervalRef.current) clearInterval(batchIntervalRef.current);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      flushQueue();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      void flushQueue();
     };
   }, [enabled, sessionId, enqueueEvent, resetIdleTimer, flushQueue]);
 
-  // Hook helpers for Monaco code change tracking
   const trackCodeChange = useCallback(
     (charsAdded: number, charsRemoved: number, totalLength: number) => {
       resetIdleTimer();
@@ -222,7 +217,7 @@ export function useTelemetry({ sessionId, enabled = true }: UseTelemetryOptions)
         test_run_index: runIndex,
         test_passed: passed,
       });
-      flushQueue();
+      return flushQueue();
     },
     [enqueueEvent, flushQueue]
   );

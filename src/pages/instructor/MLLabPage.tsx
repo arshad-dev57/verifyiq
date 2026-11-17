@@ -92,7 +92,7 @@ export const MLLabPage: React.FC = () => {
     setIsSplitting(false);
   };
 
-  if (isModelsLoading || !models) {
+  if (isModelsLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
@@ -104,6 +104,22 @@ export const MLLabPage: React.FC = () => {
       </div>
     );
   }
+
+  const modelList = models || [];
+
+  if (modelList.length === 0) {
+    return (
+      <div className="max-w-lg mx-auto py-16 text-center space-y-3">
+        <p className="text-sm font-medium text-text-primary">No ML models in the lab yet</p>
+        <p className="text-xs text-text-muted">
+          Run backend bootstrap (`make bootstrap` / `python scripts/bootstrap.py`) to seed the default rule-based model, then refresh.
+        </p>
+      </div>
+    );
+  }
+
+  const pickMetrics = (model: (typeof modelList)[0]) =>
+    model.metrics?.val || model.metrics?.test || model.metrics?.train || null;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto animate-in fade-in duration-200">
@@ -137,8 +153,9 @@ export const MLLabPage: React.FC = () => {
 
       {/* 4 Models Comparison Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {models.map((model) => {
+        {modelList.map((model) => {
           const isSelected = selectedModelId === model.id;
+          const m = pickMetrics(model);
           return (
             <Card
               key={model.id}
@@ -171,19 +188,19 @@ export const MLLabPage: React.FC = () => {
                 <div>
                   <span className="text-[10px] text-text-subtle block">Accuracy</span>
                   <span className="font-mono font-semibold text-text-secondary">
-                    {(model.metrics!.accuracy * 100).toFixed(1)}%
+                    {m ? `${(m.accuracy * 100).toFixed(1)}%` : '—'}
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-subtle block">F1 Score</span>
                   <span className="font-mono font-semibold text-teal-400">
-                    {model.metrics!.f1.toFixed(3)}
+                    {m ? m.f1.toFixed(3) : '—'}
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-subtle block">FPR Rate</span>
                   <span className="font-mono text-text-secondary">
-                    {(model.metrics!.fpr * 100).toFixed(1)}%
+                    {m ? `${(m.fpr * 100).toFixed(1)}%` : '—'}
                   </span>
                 </div>
                 <div>

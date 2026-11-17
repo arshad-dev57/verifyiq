@@ -38,7 +38,7 @@ export const ConsentPage: React.FC = () => {
       navigate(`/candidate/precheck?session_id=${res.id}&assessment_id=${res.assessment_id}`);
     } catch (err: any) {
       console.error('Session creation failed:', err);
-      // If candidate already has an in-progress session, fetch it
+      // Resume existing in-progress session only — never skip consent/session_id
       try {
         const sessionsRes = await sessionsApi.getSessions({ status: 'in_progress' });
         if (sessionsRes.sessions && sessionsRes.sessions.length > 0) {
@@ -46,8 +46,8 @@ export const ConsentPage: React.FC = () => {
           navigate(`/candidate/precheck?session_id=${active.id}&assessment_id=${active.assessment_id}`);
           return;
         }
-      } catch {}
-      navigate(`/candidate/precheck?assessment_id=${assessmentId || 'asm-py-101'}`);
+      } catch { /* empty */ }
+      alert(err?.response?.data?.detail || 'Could not start session. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

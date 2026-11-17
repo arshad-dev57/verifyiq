@@ -55,7 +55,14 @@ export interface Assessment {
   tasks?: Task[];
 }
 
-export type SessionStatus = 'in_progress' | 'submitted' | 'processing' | 'scored' | 'reviewed';
+export type SessionStatus =
+  | 'in_progress'
+  | 'submitted'
+  | 'processing'
+  | 'scored'
+  | 'reviewed'
+  | 'expired'
+  | 'abandoned';
 export type SessionCondition = 'normal' | 'controlled_ai' | 'repeat_mixed' | 'unlabeled';
 export type DatasetSplit = 'train' | 'val' | 'test' | 'none';
 export type AnomalyCategory = 'normal' | 'review_recommended' | 'high_anomaly_signal';
@@ -71,27 +78,32 @@ export interface Session {
   pseudonym_id: string;
   task_id: string;
   status: SessionStatus;
-  condition: SessionCondition;
-  split: DatasetSplit;
+  condition?: SessionCondition | null;
+  split?: DatasetSplit | null;
   consent_at?: string;
   start_time: string;
   end_time?: string;
+  ends_at?: string;
+  remaining_seconds?: number;
+  duration_minutes?: number;
   score?: number;
   tests_passed?: number;
   tests_total?: number;
   final_code?: string;
-  anomaly_score?: number; // 0-100
+  anomaly_score?: number; // 0-100 — staff only
   category?: AnomalyCategory;
   review_decision?: ReviewDecision;
   review_notes?: string;
   reviewed_at?: string;
   reviewed_by?: string;
+  credential_eligible?: boolean;
 }
 
-// 19 Behavioral Features
+// Versioned behavioral features
 export interface BehavioralFeatures {
   mean_inter_key_ms: number;
   std_inter_key_ms: number;
+  typing_speed_mean: number;
   typing_speed_cv: number;
   burstiness: number;
   backspace_ratio: number;
@@ -178,8 +190,10 @@ export interface TelemetryEvent {
   session_id: string;
   event_type: EventType;
   ts_ms: number;
+  seq?: number;
   metadata: {
     inter_key_ms?: number;
+    key_class?: 'backspace' | 'char' | 'other';
     paste_length?: number;
     cut_length?: number;
     duration_ms?: number;
@@ -225,13 +239,19 @@ export interface MLModel {
   threshold_version: string;
   is_active: boolean;
   created_at: string;
-  metrics?: {
-    accuracy: number;
-    precision: number;
-    recall: number;
-    f1: number;
-    fpr: number;
-  };
+  metrics?: Record<
+    string,
+    {
+      accuracy: number;
+      precision: number;
+      recall: number;
+      f1: number;
+      fpr: number;
+      confusion_matrix?: Record<string, number>;
+      roc?: Array<{ fpr: number; tpr: number; threshold?: number }>;
+      feature_importance?: Array<{ feature: string; importance: number; rank?: number }>;
+    }
+  >;
 }
 
 export interface MLMetrics {

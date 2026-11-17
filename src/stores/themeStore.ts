@@ -8,7 +8,8 @@ interface ThemeState {
 
 export const useThemeStore = create<ThemeState>((set) => {
   const saved = localStorage.getItem('verifyiq_theme');
-  const initialDark = saved !== null ? saved === 'dark' : true;
+  // Default to light for a Mobbin-style first impression; users can toggle anytime.
+  const initialDark = saved !== null ? saved === 'dark' : false;
 
   if (initialDark) {
     document.documentElement.classList.add('dark');

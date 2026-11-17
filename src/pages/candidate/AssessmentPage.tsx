@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { useTelemetry } from '../../hooks/useTelemetry';
@@ -10,7 +10,6 @@ import {
   Play,
   Send,
   Clock,
-  Shield,
   CheckCircle2,
   XCircle,
   Terminal,
@@ -28,9 +27,15 @@ export const AssessmentPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [code, setCode] = useState<string>('');
+  const codeRef = useRef(code);
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [timeLeft, setTimeLeft] = useState<number>(45 * 60);
+
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
   const [testOutput, setTestOutput] = useState<{
     tests_passed: number;
     tests_total: number;
@@ -45,44 +50,59 @@ export const AssessmentPage: React.FC = () => {
     enabled: !!sessionId,
   });
 
-  // Load Assessment & Active Session
+  // Load Assessment & Active Session — requires consent-created session_id
   useEffect(() => {
     let isMounted = true;
     const initEnvironment = async () => {
       try {
-        let sid = sessionId;
+        let sid = sessionId || searchParams.get('session_id') || '';
         let asmId = searchParams.get('assessment_id') || '';
 
-        // If no session passed, find or create one
+        // Never create a session here (consent must be given first). Resume only.
         if (!sid) {
           const listRes = await sessionsApi.getSessions({ status: 'in_progress' });
           if (listRes.sessions && listRes.sessions.length > 0) {
             sid = listRes.sessions[0].id;
             asmId = listRes.sessions[0].assessment_id;
-          } else {
-            // Fetch first available assessment
-            const asms = await assessmentsApi.getAssessments();
-            if (asms.length > 0) {
-              asmId = asms[0].id;
-              const newSession = await sessionsApi.createSession({
-                assessment_id: asmId,
-                consent: true,
-              });
-              sid = newSession.id;
+            if (typeof listRes.sessions[0].remaining_seconds === 'number') {
+              setTimeLeft(Math.max(0, listRes.sessions[0].remaining_seconds));
             }
+          } else {
+            if (isMounted) setIsLoading(false);
+            navigate('/candidate/consent');
+            return;
           }
-          if (sid && isMounted) setSessionId(sid);
         }
+        if (sid && isMounted) setSessionId(sid);
 
-        // Fetch session or assessment
         if (sid) {
           try {
             const sess = await sessionsApi.getSession(sid);
             asmId = sess.assessment_id;
-          } catch { }
+            if (sess.status !== 'in_progress') {
+              navigate(`/candidate/result?session_id=${sid}`);
+              return;
+            }
+            // Server timer is authoritative
+            if (typeof sess.remaining_seconds === 'number') {
+              setTimeLeft(Math.max(0, sess.remaining_seconds));
+            } else if (sess.ends_at) {
+              const rem = Math.floor((new Date(sess.ends_at).getTime() - Date.now()) / 1000);
+              setTimeLeft(Math.max(0, rem));
+            } else if (sess.duration_minutes) {
+              setTimeLeft(sess.duration_minutes * 60);
+            }
+          } catch {
+            /* fall through */
+          }
         }
 
-        if (!asmId) asmId = 'asm-py-101';
+        if (!asmId) {
+          if (isMounted) setIsLoading(false);
+          navigate('/candidate');
+          return;
+        }
+
         let asm: Assessment | null = null;
         try {
           asm = await assessmentsApi.getAssessment(asmId);
@@ -92,38 +112,51 @@ export const AssessmentPage: React.FC = () => {
             if (allAsms.length > 0) {
               asm = allAsms.find((a) => a.id === asmId) || allAsms[0];
             }
-          } catch { }
+          } catch { /* empty */ }
         }
 
         if (isMounted && asm) {
           setAssessment(asm);
-          const t: Task = (asm.tasks && asm.tasks.length > 0) ? asm.tasks[0] : {
-            id: `tsk-${asm.id}`,
-            assessment_id: asm.id,
-            title: `${asm.title} - Main Task`,
-            statement: asm.description || 'Implement the solution according to the requirements.',
-            language: 'python' as const,
-            starter_code: `# Assessment: ${asm.title}\n\ndef solve(*args, **kwargs):\n    # Write your solution below\n    return True\n\nif __name__ == '__main__':\n    print("Executing solution:", solve())\n`,
-            test_config: {
-              test_cases: [
-                {
-                  id: 'tc-1',
-                  input: 'solve()',
-                  expected_output: 'True',
-                  is_hidden: false,
-                  explanation: 'Initial verification run',
-                },
-              ],
-              timeout_ms: 5000,
-              memory_limit_mb: 256,
-            },
-            points: 100,
-          };
-          setTask(t);
-          if (t) {
-            setCode(t.starter_code);
+          let assignedTaskId: string | null = null;
+          if (sid) {
+            try {
+              const sess = await sessionsApi.getSession(sid);
+              assignedTaskId = sess.task_id || null;
+            } catch { /* empty */ }
           }
-          setTimeLeft((asm.duration_minutes || 45) * 60);
+          const matched =
+            assignedTaskId && asm.tasks
+              ? asm.tasks.find((x) => x.id === assignedTaskId)
+              : undefined;
+          const t: Task =
+            matched ||
+            (asm.tasks && asm.tasks.length > 0
+              ? asm.tasks[0]
+              : undefined) ||
+            ({
+                  id: `tsk-${asm.id}`,
+                  assessment_id: asm.id,
+                  title: `${asm.title} - Main Task`,
+                  statement: asm.description || 'Implement the solution according to the requirements.',
+                  language: 'python' as const,
+                  starter_code: `# Assessment: ${asm.title}\n\ndef solve(*args, **kwargs):\n    return True\n`,
+                  test_config: {
+                    test_cases: [
+                      {
+                        id: 'tc-1',
+                        input: 'solve()',
+                        expected_output: 'True',
+                        is_hidden: false,
+                        explanation: 'Initial verification run',
+                      },
+                    ],
+                    timeout_ms: 5000,
+                    memory_limit_mb: 256,
+                  },
+                  points: 100,
+                } as Task);
+          setTask(t);
+          if (t) setCode(t.starter_code);
         }
       } catch (err) {
         console.error('Failed to initialize assessment:', err);
@@ -138,29 +171,60 @@ export const AssessmentPage: React.FC = () => {
     };
   }, []);
 
-  // Countdown timer
+  const finalizeSubmit = useCallback(
+    async (reason: string, askConfirm: boolean) => {
+      if (submittingRef.current || !sessionId) return;
+      if (
+        askConfirm &&
+        !confirm(
+          'Are you ready to finalize and submit your assessment solution? Telemetry recording will conclude.'
+        )
+      ) {
+        return;
+      }
+
+      submittingRef.current = true;
+      setIsSubmitting(true);
+      try {
+        await trackSubmitAttempt(reason);
+        await sessionsApi.submitSession(sessionId, codeRef.current);
+        navigate(`/candidate/confirmation?session_id=${sessionId}`);
+      } catch (err) {
+        console.error('Submit failed:', err);
+        if (askConfirm) {
+          alert('Submit failed. Please try again — your session was not double-submitted.');
+        } else {
+          navigate(`/candidate/confirmation?session_id=${sessionId}`);
+        }
+      } finally {
+        submittingRef.current = false;
+        setIsSubmitting(false);
+      }
+    },
+    [sessionId, trackSubmitAttempt, navigate]
+  );
+
+  // Display-only countdown; expiry triggers server submit
   useEffect(() => {
+    if (!sessionId || isLoading) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmit();
+          void finalizeSubmit('timer_expired', false);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
-  }, [code, sessionId]);
+  }, [sessionId, isLoading, finalizeSubmit]);
 
   const handleEditorChange = (val: string | undefined) => {
     const newCode = val || '';
     const charsAdded = Math.max(0, newCode.length - code.length);
     const charsRemoved = Math.max(0, code.length - newCode.length);
     setCode(newCode);
-
-    // Track character delta and timestamp without logging the actual characters
     trackCodeChange(charsAdded, charsRemoved, newCode.length);
   };
 
@@ -178,23 +242,7 @@ export const AssessmentPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (isSubmitting || !sessionId) return;
-    if (!confirm('Are you ready to finalize and submit your assessment solution? Telemetry recording will conclude.')) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await trackSubmitAttempt();
-      await sessionsApi.submitSession(sessionId, code);
-      navigate(`/candidate/confirmation?session_id=${sessionId}`);
-    } catch (err) {
-      navigate(`/candidate/confirmation?session_id=${sessionId}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const handleSubmit = () => finalizeSubmit('candidate_submit', true);
 
   if (isLoading) {
     return (

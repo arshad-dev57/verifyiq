@@ -56,8 +56,12 @@ export const PreCheckPage: React.FC = () => {
   ];
 
   const handleEnterEnvironment = () => {
+    if (!sessionId) {
+      navigate(`/candidate/consent?assessment_id=${encodeURIComponent(assessmentId)}`);
+      return;
+    }
     const params = new URLSearchParams();
-    if (sessionId) params.set('session_id', sessionId);
+    params.set('session_id', sessionId);
     if (assessmentId) params.set('assessment_id', assessmentId);
     navigate(`/candidate/assessment?${params.toString()}`);
   };
